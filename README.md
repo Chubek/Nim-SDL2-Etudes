@@ -37,3 +37,9 @@ https://github.com/Vladar4/sdl2_nim
 Accompanying Post: Coming Soon!
 
 A bouncing ball, very simple, but it showcases the basics of SDL in Nim, especially Nim's meta-like functions (coincidentally, Nim has both meta-like symbolic functions AND macros! Metaprogramming with Nim is going to be fun yum!)
+
+### `pong.nim`
+
+Accompanying Post: Coming Soon
+
+This is a very INTELLIGENT Pong game! It does not randomly go up and down. It uses conditional probability to go up and down and speed up and down.

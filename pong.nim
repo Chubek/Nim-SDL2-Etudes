@@ -1,7 +1,7 @@
 import
   random,
-  sdl2_nim/sdl
-
+  sdl2_nim/sdl,
+  std/math
 
 const
   Title = "SDL2 App"
@@ -123,6 +123,8 @@ const
 
     POSSIBLE_INIT_SPEEDS = [-3, 3]
 
+
+
 var
     app = App(window: nil, renderer: nil)
     done = false # Main loop exit condition
@@ -147,12 +149,7 @@ var
 
     opponentPaddleDir = -1
 
-
-proc `+->`(opX: int) =
-    paddleOpponentY += opX * PADDLE_SPEED_OPPONENT
-
-    if paddleOpponentY <= 0 or paddleOpponentY >= ScreenH - PADDLE_HEIGHT:
-        opponentPaddleDir *= -1
+    speedCoeff = 1
 
 
 proc drawMiddleLine(app: App) =
@@ -229,13 +226,15 @@ proc `<->`(xSpeedX, ySpeedX: int) =
     xi += xSpeedX
     yi += ySpeedX
 
-    if xi <= PADDLE_PLAYER_X + PADDLE_WIDTH and yi >= paddlePlayerY and yi < paddlePlayerY + PADDLE_HEIGHT:
+    if xi <= PADDLE_PLAYER_X + (PADDLE_WIDTH div 2) and yi >= paddlePlayerY and yi < paddlePlayerY + PADDLE_HEIGHT:
         xSpeed *= -1
         ySpeed *= -1
 
-    if xi >= PADDLE_OPPONENT_X - PADDLE_WIDTH and  yi >= paddleOpponentY and yi < paddleOpponentY + PADDLE_HEIGHT:
+
+    if xi >= PADDLE_OPPONENT_X - (PADDLE_WIDTH div 2) and  yi >= paddleOpponentY and yi < paddleOpponentY + PADDLE_HEIGHT:
         xSpeed *= -1
         ySpeed *= -1
+
 
     if yi <= 0 or yi >= ScreenH:
         ySpeed *= -1
@@ -243,7 +242,6 @@ proc `<->`(xSpeedX, ySpeedX: int) =
 
 
 proc `?>`(xii, yii: int) = 
-    var isOut = false
 
     if xii <= 0 or xii >= ScreenW:
         delay(2000)
@@ -254,6 +252,92 @@ proc `?>`(xii, yii: int) =
         paddlePlayerY = ScreenH div 2
         paddleOpponentY = ScreenH div 2
   
+
+###################################AI####################333###############################3
+
+
+const 
+    MIN_DIST = 20.0
+
+
+var
+    goUp = false
+    goDown = false
+    speedUp = false
+    resetPos = false
+
+
+proc `~~~>`(pnt1, pnt2: (int, int)): float =
+    var powOne = (pnt2[0] - pnt1[0]) ^ 2
+    var powTwo = (pnt2[1] - pnt1[1]) ^ 2
+
+    var addition = float(powTwo - powOne)
+
+    result = sqrt(addition)
+
+
+
+
+proc `|`(aAndB, A: float): float = 
+    result = aAndB / A
+
+
+proc calcSpeedUp() =
+    var distBall = (xi, yi)~~~>(PADDLE_OPPONENT_X, paddleOpponentY)
+
+    var probDist = distBall|MIN_DIST
+
+
+    speedUp = probDist > 0.5
+
+
+proc calcGoUp() =
+    var probYHeight = float(yi)|float(ScreenH)
+    var probXWidth = float(xi)|float(ScreenW)
+
+
+    goUp = probYHeight <= 0.75 and probXWidth >= 0.75
+
+
+proc calcGoDown() =
+    var probYHeight = float(yi)|float(ScreenH)
+    var probXWidth = float(xi)|float(ScreenW)
+
+    goDown = probYHeight >= 0.75 and probXWidth >= 0.75
+
+
+proc calcReset() = 
+    var probXWidth = float(xi)|float(ScreenW)
+
+    resetPos = probXWidth <= 0.75
+
+    
+
+proc `+->`(opX: int) =
+    calcSpeedUp()
+    calcReset()
+    calcGoUp()
+    calcGoDown()
+
+    var dontResetPos = not resetPos
+    var isDown = paddleOpponentY >= 0
+    var isUp = paddleOpponentY <= ScreenH - PADDLE_HEIGHT
+    var inMiddle =  paddleOpponentY - (ScreenH div 2)
+    var sign = (if inMiddle == 0: 0 else: abs(inMiddle) div inMiddle)
+    var localResPos = resetPos and inMiddle != 0
+
+    if localResPos:
+      paddleOpponentY += -sign * PADDLE_SPEED_OPPONENT
+    if goUp and isDown and dontResetPos and not localResPos:
+      paddleOpponentY -= PADDLE_SPEED_OPPONENT * speedCoeff
+    if goDOwn and isUp and dontResetPos and not localResPos:
+      paddleOpponentY += PADDLE_SPEED_OPPONENT * speedCoeff
+    
+        
+
+ 
+
+    
 
 
 if init(app):
