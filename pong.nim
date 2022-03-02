@@ -105,7 +105,7 @@ proc `>>`(app: App) =
 
 
 const
-    PADDLE_HEIGHT = 80
+    PADDLE_HEIGHT = 90
     PADDLE_WIDTH = 24
 
     PADDLE_PLAYER_X = 0
