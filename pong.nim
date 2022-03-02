@@ -105,7 +105,7 @@ proc `>>`(app: App) =
 
 
 const
-    PADDLE_HEIGHT = 120
+    PADDLE_HEIGHT = 80
     PADDLE_WIDTH = 20
 
     PADDLE_PLAYER_X = 0
@@ -116,12 +116,15 @@ const
     MIDDLE_LINE_WIDTH = 20
     MIDDLE_LINE_HIGHT = ScreenH
 
-    PADDLE_SPEED_PLAYER = 24
+    PADDLE_SPEED_PLAYER = 8
     PADDLE_SPEED_OPPONENT = 6
 
     RADIUS = 10
 
+
     POSSIBLE_INIT_SPEEDS = [-3, 3]
+
+    TIME_TIME = 50
 
 
 
@@ -150,6 +153,12 @@ var
     opponentPaddleDir = -1
 
     speedCoeff = 1
+
+    stopBounce = false
+
+    tick: uint32 = TIME_TIME
+
+    ballCollisionPoint = 0
 
 
 proc drawMiddleLine(app: App) =
@@ -181,11 +190,13 @@ proc drawPlayerPaddle(app: App) =
     discard app.renderer.setRenderDrawColor(0x00, 0x00, 0x00, 0x00)
 
 proc controlPlayerPaddle() = 
-    if K_UP in pressed and paddlePlayerY > 0:
-        paddlePlayerY -= PADDLE_SPEED_PLAYER
-    
-    if K_DOWN in pressed and paddlePlayerY < ScreenH - PADDLE_HEIGHT:
-        paddlePlayerY += PADDLE_SPEED_PLAYER
+  let kbd = sdl.getKeyboardState(nil)
+
+  if kbd[ScancodeUp] > 0 and paddlePlayerY > 0:
+    paddlePlayerY -= PADDLE_SPEED_PLAYER
+  
+  if kbd[ScancodeDown] > 0 and paddlePlayerY < ScreenH - PADDLE_HEIGHT:
+    paddlePlayerY += PADDLE_SPEED_PLAYER
 
 
 proc drawBall(app: App) = 
@@ -222,22 +233,51 @@ proc drawBall(app: App) =
     discard app.renderer.setRenderDrawColor(0x00, 0x00, 0x00, 0x00)
 
 
+proc stopBounceTimer(interval: uint32, param: pointer): uint32 {.cdecl.} =
+  tick -= 1
+  if tick == 0:
+    xSpeed *= -1
+    ySpeed *= -1
+    xi += xSpeed * 5
+    yi += ySpeed * 5
+    stopBounce = false
+
+  return tick
+
+
+
+
+proc stopTheBounce() =
+  stopBounce = true
+  var timer = sdl.addTimer(TIME_TIME, stopBounceTimer, nil)
+
+  if timer == 0:
+    discard sdl.removeTimer(timer)    
+
+
 proc `<->`(xSpeedX, ySpeedX: int) = 
-    xi += xSpeedX
-    yi += ySpeedX
+    if not stopBounce:    
+      xi += xSpeedX
+      yi += ySpeedX
+    else:
+      xi = PADDLE_PLAYER_X + PADDLE_WIDTH
+      yi = paddlePlayerY + ballCollisionPoint
 
     if xi <= PADDLE_PLAYER_X + (PADDLE_WIDTH div 2) and yi >= paddlePlayerY and yi < paddlePlayerY + PADDLE_HEIGHT:
-        xSpeed *= -1
-        ySpeed *= -1
+      ballCollisionPoint = yi - paddlePlayerY
+      if not stopBounce:
+        tick = TIME_TIME
+        stopTheBounce()
+      
 
 
     if xi >= PADDLE_OPPONENT_X - (PADDLE_WIDTH div 2) and  yi >= paddleOpponentY and yi < paddleOpponentY + PADDLE_HEIGHT:
-        xSpeed *= -1
-        ySpeed *= -1
+      xSpeed *= -1
+      ySpeed *= -1
 
 
     if yi <= 0 or yi >= ScreenH:
-        ySpeed *= -1
+      ySpeed *= -1
 
 
 
@@ -257,7 +297,7 @@ proc `?>`(xii, yii: int) =
 
 
 const 
-    MIN_DIST = 20.0
+    MIN_DIST = 50
 
 
 var
@@ -288,7 +328,12 @@ proc calcSpeedUp() =
     var probDist = distBall|MIN_DIST
 
 
-    speedUp = probDist > 0.5
+    speedUp = probDist > 0.5 and probDist < 1.0
+
+    if speedup:
+      speedCoeff = 3
+    else:
+      speedCoeff = 1
 
 
 proc calcGoUp() =
