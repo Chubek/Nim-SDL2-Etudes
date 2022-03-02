@@ -106,10 +106,10 @@ proc `>>`(app: App) =
 
 const
     PADDLE_HEIGHT = 80
-    PADDLE_WIDTH = 20
+    PADDLE_WIDTH = 24
 
     PADDLE_PLAYER_X = 0
-    PADDLE_OPPONENT_X = ScreenW - 20
+    PADDLE_OPPONENT_X = ScreenW - PADDLE_WIDTH
 
     MIDDLE_LINE_X = ScreenW div 2
     MIDDLE_LINE_Y = 0
@@ -117,14 +117,14 @@ const
     MIDDLE_LINE_HIGHT = ScreenH
 
     PADDLE_SPEED_PLAYER = 8
-    PADDLE_SPEED_OPPONENT = 6
+    PADDLE_SPEED_OPPONENT = 16
 
-    RADIUS = 10
+    RADIUS = 8
+    RADIUS_MULT_TWO = RADIUS shl 1
 
+    POSSIBLE_INIT_SPEEDS = [-6, 6]
 
-    POSSIBLE_INIT_SPEEDS = [-3, 3]
-
-    TIME_TIME = 50
+    STOP_TIME = 25
 
 
 
@@ -156,7 +156,7 @@ var
 
     stopBounce = false
 
-    tick: uint32 = TIME_TIME
+    tick: uint32 = STOP_TIME
 
     ballCollisionPoint = 0
 
@@ -208,7 +208,7 @@ proc drawBall(app: App) =
     var tx: int = 1
     var ty: int = 1
 
-    var err = tx - (RADIUS shl 1)
+    var err = tx - RADIUS_MULT_TWO
 
     while x >= y:
       discard app.renderer.renderDrawPoint(xi + x, yi + y)
@@ -228,7 +228,7 @@ proc drawBall(app: App) =
       if err > 0:
         dec(x)
         tx += 2
-        err += tx + (RADIUS shl 1)
+        err += tx - RADIUS_MULT_TWO
 
     discard app.renderer.setRenderDrawColor(0x00, 0x00, 0x00, 0x00)
 
@@ -249,7 +249,7 @@ proc stopBounceTimer(interval: uint32, param: pointer): uint32 {.cdecl.} =
 
 proc stopTheBounce() =
   stopBounce = true
-  var timer = sdl.addTimer(TIME_TIME, stopBounceTimer, nil)
+  var timer = sdl.addTimer(STOP_TIME, stopBounceTimer, nil)
 
   if timer == 0:
     discard sdl.removeTimer(timer)    
@@ -266,7 +266,7 @@ proc `<->`(xSpeedX, ySpeedX: int) =
     if xi <= PADDLE_PLAYER_X + (PADDLE_WIDTH div 2) and yi >= paddlePlayerY and yi < paddlePlayerY + PADDLE_HEIGHT:
       ballCollisionPoint = yi - paddlePlayerY
       if not stopBounce:
-        tick = TIME_TIME
+        tick = STOP_TIME
         stopTheBounce()
       
 
@@ -297,21 +297,22 @@ proc `?>`(xii, yii: int) =
 
 
 const 
-    MIN_DIST = 50
-
+    MIN_DIST = 60
+    MIN_DIST_NEAR = 60
 
 var
     goUp = false
     goDown = false
     speedUp = false
     resetPos = false
+    isNear = false
 
 
 proc `~~~>`(pnt1, pnt2: (int, int)): float =
     var powOne = (pnt2[0] - pnt1[0]) ^ 2
     var powTwo = (pnt2[1] - pnt1[1]) ^ 2
 
-    var addition = float(powTwo - powOne)
+    var addition = float(powTwo + powOne)
 
     result = sqrt(addition)
 
@@ -323,17 +324,35 @@ proc `|`(aAndB, A: float): float =
 
 
 proc calcSpeedUp() =
-    var distBall = (xi, yi)~~~>(PADDLE_OPPONENT_X, paddleOpponentY)
+    var distBallTop = (xi, yi)~~~>(PADDLE_OPPONENT_X - PADDLE_WIDTH, paddleOpponentY)
+    var distBallMiddle = (xi, yi)~~~>(PADDLE_OPPONENT_X - PADDLE_WIDTH, paddleOpponentY + (PADDLE_HEIGHT div 2))
+    var distBallBottom = (xi, yi)~~~>(PADDLE_OPPONENT_X - PADDLE_WIDTH, paddleOpponentY + PADDLE_HEIGHT)
 
-    var probDist = distBall|MIN_DIST
+
+    var probDistTop = distBallTop|MIN_DIST
+    var probDistNearTop = distBallTop|MIN_DIST_NEAR
+    var probDistMiddle = distBallMiddle|MIN_DIST
+    var probDistNearMiddle = distBallMiddle|MIN_DIST_NEAR
+    var probDistBottom = distBallBottom|MIN_DIST
+    var probDistNearBottom  = distBallBottom|MIN_DIST_NEAR
 
 
-    speedUp = probDist > 0.5 and probDist < 1.0
+    var isNearTop = probDistNearTop < 1.0
+    var speedUpTop = probDistTop >= 0.5 and probDistTop < 1.0
+    var isNearMiddle = probDistNearMiddle < 1.0
+    var speedUpMiddle = probDistMiddle >= 0.5 and probDistMiddle < 1.0
+    var isNearBottom  = probDistNearBottom  < 1.0
+    var speedUpBottom  = probDistBottom  >= 0.5 and probDistBottom  < 1.0
+
+    isNear = isNearBottom or isNearTop or isNearMiddle
+    speedUp = speedUpBottom or speedUpMiddle or speedUpTop
 
     if speedup:
-      speedCoeff = 3
+      speedCoeff = 10
     else:
       speedCoeff = 1
+
+
 
 
 proc calcGoUp() =
@@ -341,14 +360,14 @@ proc calcGoUp() =
     var probXWidth = float(xi)|float(ScreenW)
 
 
-    goUp = probYHeight <= 0.75 and probXWidth >= 0.75
+    goUp = probYHeight <= 0.5 and probXWidth >= 0.75
 
 
 proc calcGoDown() =
     var probYHeight = float(yi)|float(ScreenH)
     var probXWidth = float(xi)|float(ScreenW)
 
-    goDown = probYHeight >= 0.75 and probXWidth >= 0.75
+    goDown = probYHeight >= 0.5 and probXWidth >= 0.75
 
 
 proc calcReset() = 
@@ -371,11 +390,12 @@ proc `+->`(opX: int) =
     var sign = (if inMiddle == 0: 0 else: abs(inMiddle) div inMiddle)
     var localResPos = resetPos and inMiddle != 0
 
+
     if localResPos:
       paddleOpponentY += -sign * PADDLE_SPEED_OPPONENT
-    if goUp and isDown and dontResetPos and not localResPos:
+    if goUp and isDown and dontResetPos and not localResPos and not isNear:
       paddleOpponentY -= PADDLE_SPEED_OPPONENT * speedCoeff
-    if goDOwn and isUp and dontResetPos and not localResPos:
+    if goDOwn and isUp and dontResetPos and not localResPos and not isNear:
       paddleOpponentY += PADDLE_SPEED_OPPONENT * speedCoeff
     
         
